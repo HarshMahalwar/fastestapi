@@ -39,3 +39,10 @@ target_link_libraries(fastestapi INTERFACE
 
 add_executable(example examples/main.cpp)
 target_link_libraries(example PRIVATE fastestapi)
+
+option(BUILD_TESTS "Build test suite" OFF)
+
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
