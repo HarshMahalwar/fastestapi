@@ -246,7 +246,7 @@ int main() {
     app.route<UpdateItem>();
     app.route<DeleteItem>();
 
-    app.listen("localhost", 8080);
+    app.listen("0.0.0.0", 8080);
 
     return 0;
 }

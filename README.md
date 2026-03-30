@@ -117,3 +117,24 @@ Implement `IDatabase` for PostgreSQL, MySQL, etc. and inject it:
 auto pg = std::make_shared<PostgresDatabase>();
 ServiceRegistry::instance().setDatabase(pg);
 ```
+
+### Use from a downstream project
+
+Create a `Dockerfile` in your application repository that inherits from the
+base image:
+
+```dockerfile
+FROM NoFL1cksPlz/fastestapi-base:latest
+
+WORKDIR /app
+COPY . .
+
+RUN cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    && cmake --build build --parallel \
+    && cp build/example /usr/local/bin/example \
+    && rm -rf build
+
+EXPOSE 8080
+CMD ["example"]
+
+```
