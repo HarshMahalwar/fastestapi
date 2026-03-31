@@ -24,7 +24,7 @@ FetchContent_MakeAvailable(json)
 
 # SQLite3
 find_package(SQLite3 REQUIRED)
-
+find_package(Poco REQUIRED COMPONENTS Redis Net Foundation)
 
 add_library(fastestapi INTERFACE)
 target_include_directories(fastestapi INTERFACE
@@ -34,6 +34,9 @@ target_link_libraries(fastestapi INTERFACE
     httplib::httplib
     nlohmann_json::nlohmann_json
     SQLite::SQLite3
+    Poco::Redis
+    Poco::Net
+    Poco::Foundation
 )
 
 

@@ -11,6 +11,13 @@ namespace fastestapi {
 using DbValue = std::variant<std::nullptr_t, int, int64_t, double, std::string>;
 using DbRow = std::unordered_map<std::string, DbValue>;
 
+struct CacheConfig {
+    std::string host       = "127.0.0.1";
+    int         port       = 6379;
+    std::string password;                  // empty = no AUTH
+    int         defaultTtl = 0;            // 0 = no expiry
+};
+
 enum class FieldType { Integer, Real, Text };
 
 enum class FieldConstraint { None, PrimaryKey, AutoIncrement, NotNull };
