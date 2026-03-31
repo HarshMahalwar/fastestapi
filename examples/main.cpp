@@ -5,7 +5,6 @@
 using namespace fastestapi;
 using json = nlohmann::json;
 
-// JSON Schema helpers for the Item model
 namespace ItemSchema {
     inline json item() {
         return {
@@ -18,10 +17,7 @@ namespace ItemSchema {
         };
     }
     inline json itemArray() {
-        return {
-            {"type", "array"},
-            {"items", item()}
-        };
+        return {{"type", "array"}, {"items", item()}};
     }
     inline json createRequest() {
         return {
@@ -44,7 +40,6 @@ namespace ItemSchema {
     }
 }
 
-// Model
 struct Item : public Model<Item> {
     int         id    = 0;
     std::string name;
@@ -113,15 +108,17 @@ struct Item : public Model<Item> {
     std::vector<DbValue>     writableValues()  const { return {name, price}; }
 };
 
-// Endpoints
+static std::string itemCacheKey(int id) {
+    return "item:" + std::to_string(id);
+}
 
 class ListItems : public GetEndpoint {
 public:
     ListItems() : GetEndpoint("/items") {}
 
-    std::string    summary()        const override { return "List all items"; }
-    std::vector<std::string> tags() const override { return {"Items"}; }
-    json           responseSchema() const override { return ItemSchema::itemArray(); }
+    std::string              summary()        const override { return "List all items"; }
+    std::vector<std::string> tags()           const override { return {"Items"}; }
+    json                     responseSchema() const override { return ItemSchema::itemArray(); }
 
     Response handle(const Request&) override {
         auto items = Item::getAll();
@@ -135,17 +132,29 @@ class GetItem : public GetEndpoint {
 public:
     GetItem() : GetEndpoint("/items/{id}") {}
 
-    std::string    summary()        const override { return "Get an item by ID"; }
-    std::vector<std::string> tags() const override { return {"Items"}; }
-    json           responseSchema() const override { return ItemSchema::item(); }
+    std::string              summary()        const override { return "Get an item by ID"; }
+    std::vector<std::string> tags()           const override { return {"Items"}; }
+    json                     responseSchema() const override { return ItemSchema::item(); }
 
     Response handle(const Request& req) override {
         int id = 0;
         try { id = std::stoi(req.param("id")); }
         catch (...) { return Response::badRequest("Parameter 'id' must be an integer"); }
 
+        // Try cache first
+        auto& registry = ServiceRegistry::instance();
+        if (registry.hasCache()) {
+            auto cached = registry.cache().get(itemCacheKey(id));
+            if (cached) return Response::json(json::parse(*cached));
+        }
+
         auto item = Item::get(id);
         if (!item) return Response::notFound("Item not found");
+
+        // Populate cache
+        if (registry.hasCache())
+            registry.cache().set(itemCacheKey(id), item->toJson().dump(), 60);
+
         return Response::json(item->toJson());
     }
 };
@@ -154,10 +163,10 @@ class CreateItem : public PostEndpoint {
 public:
     CreateItem() : PostEndpoint("/items") {}
 
-    std::string    summary()        const override { return "Create a new item"; }
-    std::vector<std::string> tags() const override { return {"Items"}; }
-    json           requestSchema()  const override { return ItemSchema::createRequest(); }
-    json           responseSchema() const override { return ItemSchema::item(); }
+    std::string              summary()        const override { return "Create a new item"; }
+    std::vector<std::string> tags()           const override { return {"Items"}; }
+    json                     requestSchema()  const override { return ItemSchema::createRequest(); }
+    json                     responseSchema() const override { return ItemSchema::item(); }
 
     Response handle(const Request& req) override {
         auto body = req.json();
@@ -170,6 +179,12 @@ public:
 
         try {
             auto created = Item::create(body);
+
+            auto& registry = ServiceRegistry::instance();
+            if (registry.hasCache())
+                registry.cache().set(itemCacheKey(created.id),
+                                     created.toJson().dump(), 60);
+
             return Response::created(created.toJson());
         } catch (const std::exception& e) {
             return Response::serverError(e.what());
@@ -181,10 +196,10 @@ class UpdateItem : public PutEndpoint {
 public:
     UpdateItem() : PutEndpoint("/items/{id}") {}
 
-    std::string    summary()        const override { return "Update an existing item"; }
-    std::vector<std::string> tags() const override { return {"Items"}; }
-    json           requestSchema()  const override { return ItemSchema::updateRequest(); }
-    json           responseSchema() const override { return ItemSchema::item(); }
+    std::string              summary()        const override { return "Update an existing item"; }
+    std::vector<std::string> tags()           const override { return {"Items"}; }
+    json                     requestSchema()  const override { return ItemSchema::updateRequest(); }
+    json                     responseSchema() const override { return ItemSchema::item(); }
 
     Response handle(const Request& req) override {
         int id = 0;
@@ -202,6 +217,12 @@ public:
         try {
             auto updated = Item::update(id, body);
             if (!updated) return Response::notFound("Item not found");
+
+            auto& registry = ServiceRegistry::instance();
+            if (registry.hasCache())
+                registry.cache().set(itemCacheKey(id),
+                                     updated->toJson().dump(), 60);
+
             return Response::json(updated->toJson());
         } catch (const std::exception& e) {
             return Response::serverError(e.what());
@@ -213,8 +234,8 @@ class DeleteItem : public DeleteEndpoint {
 public:
     DeleteItem() : DeleteEndpoint("/items/{id}") {}
 
-    std::string    summary()        const override { return "Delete an item"; }
-    std::vector<std::string> tags() const override { return {"Items"}; }
+    std::string              summary()  const override { return "Delete an item"; }
+    std::vector<std::string> tags()     const override { return {"Items"}; }
 
     Response handle(const Request& req) override {
         int id = 0;
@@ -224,6 +245,11 @@ public:
         try {
             bool removed = Item::remove(id);
             if (!removed) return Response::notFound("Item not found");
+
+            auto& registry = ServiceRegistry::instance();
+            if (registry.hasCache())
+                registry.cache().del(itemCacheKey(id));
+
             return Response::noContent();
         } catch (const std::exception& e) {
             return Response::serverError(e.what());
@@ -236,6 +262,14 @@ int main() {
         .title       = "Item Store API",
         .version     = "1.0.0",
         .description = "A sample CRUD API built with FastestAPI"
+    });
+
+    // Optional: enable Redis cache
+    app.cache({
+        .host       = "127.0.0.1",
+        .port       = 6379,
+        .password   = "",        // set if Redis requires AUTH
+        .defaultTtl = 60         // seconds
     });
 
     app.model<Item>();

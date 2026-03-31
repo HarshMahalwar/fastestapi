@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fastestapi/cache/redis_cache.hpp>
 #include <fastestapi/core/service_registry.hpp>
 #include <fastestapi/core/types.hpp>
 #include <fastestapi/core/request.hpp>
@@ -33,6 +34,20 @@ public:
         ServiceRegistry::instance().setQueryBuilder(qb_);
     }
 
+    // Enable Redis cache with the given configuration
+    Application& cache(const CacheConfig& cfg = {}) {
+        cache_ = std::make_shared<RedisCache>();
+        cache_->connect(cfg.host, cfg.port);
+
+        if (!cfg.password.empty())
+            cache_->authenticate(cfg.password);
+
+        defaultTtl_ = cfg.defaultTtl;
+
+        ServiceRegistry::instance().setCache(cache_);
+        return *this;
+    }
+
     template <typename ModelType>
     Application& model() {
         ModelType::createTable();
@@ -61,12 +76,12 @@ public:
 
         // Documentation endpoints (/docs and /openapi.json)
         if (docsEnabled_) {
-            // Pre-generate the spec so it captures all registered routes
             OpenApiGenerator gen(appInfo_);
             std::string specJson = gen.generate(
                 router_->endpoints(), host, port).dump(2);
 
-            std::string uiHtml = swaggerUiHtml("/openapi.json", appInfo_.title + " — Docs");
+            std::string uiHtml = swaggerUiHtml("/openapi.json",
+                                               appInfo_.title + " — Docs");
 
             svr.Get("/openapi.json",
                 [specJson](const httplib::Request&, httplib::Response& res) {
@@ -116,8 +131,10 @@ public:
 private:
     std::shared_ptr<IDatabase>     db_;
     std::shared_ptr<IQueryBuilder> qb_;
+    std::shared_ptr<ICache>        cache_;
     std::shared_ptr<Router>        router_;
     AppInfo                        appInfo_;
+    int                            defaultTtl_  = 0;
     bool                           docsEnabled_ = true;
 };
 

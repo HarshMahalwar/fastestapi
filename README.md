@@ -23,8 +23,52 @@ A lightweight C++ REST framework inspired by Python's FastAPI
 
 **Ubuntu / Debian:**
 ```bash
-sudo apt-get install cmake
 sudo apt-get install libsqlite3-dev
+```
+
+## Redis Cache (Optional)
+
+### Install Poco
+
+**Ubuntu / Debian:**
+```bash
+sudo apt-get install libpoco-dev
+```
+
+### Enable in your application
+
+```cpp
+app.cache({
+    .host       = "127.0.0.1",
+    .port       = 6379,
+    .password   = "",       // empty = no AUTH
+    .defaultTtl = 60        // seconds, 0 = no expiry
+});
+```
+
+### Use from any endpoint
+
+```cpp
+auto& registry = ServiceRegistry::instance();
+if (registry.hasCache()) {
+    // Read-through
+    auto cached = registry.cache().get("my:key");
+    if (cached) { /* use *cached */ }
+
+    // Write
+    registry.cache().set("my:key", valueStr, 120);
+
+    // Invalidate
+    registry.cache().del("my:key");
+}
+```
+
+### Swap cache backend
+
+Implement `ICache` for Memcached, etc. and inject it:
+```cpp
+auto mc = std::make_shared<MemcachedCache>();
+ServiceRegistry::instance().setCache(mc);
 ```
 
 ### Build
@@ -125,6 +169,11 @@ base image:
 
 ```dockerfile
 FROM NoFL1cksPlz/fastestapi-base:latest
+
+# Install Poco development libraries for Redis support
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpoco-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY . .

@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         libsqlite3-dev \
         libssl-dev \
+        libpoco-dev \
     && rm -rf /var/lib/apt/lists/*
 
 FROM base AS builder
