@@ -20,6 +20,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set image name
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          echo "IMAGE=ghcr.io/${OWNER,,}/fastestapi-base" >> "$GITHUB_ENV"
+
       - name: Build base image
         run: sudo docker build --target base -t fastestapi-base .
 
@@ -63,7 +68,7 @@ jobs:
               exit $test_exit
             '
 
-      - name: Fix permissions
+      - name: Add permissions
         if: always()
         run: sudo chown -R $(id -u):$(id -g) . 2>/dev/null || true
 
@@ -89,26 +94,22 @@ jobs:
       - name: Build runtime image
         if: github.event_name == 'push'
         run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/fastestapi-base
-          SHA_TAG="${IMAGE}:${{ github.sha }}"
-          sudo docker build -t "${SHA_TAG}" .
+          sudo docker build -t "${{ env.IMAGE }}:${{ github.sha }}" .
 
       - name: Push runtime image
         if: github.event_name == 'push'
         run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/fastestapi-base
-
-          sudo docker push "${IMAGE}:${{ github.sha }}"
+          sudo docker push "${{ env.IMAGE }}:${{ github.sha }}"
 
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TAG="${{ github.ref_name }}"
-            sudo docker tag "${IMAGE}:${{ github.sha }}" "${IMAGE}:${TAG}"
-            sudo docker tag "${IMAGE}:${{ github.sha }}" "${IMAGE}:latest"
-            sudo docker push "${IMAGE}:${TAG}"
-            sudo docker push "${IMAGE}:latest"
+            sudo docker tag "${{ env.IMAGE }}:${{ github.sha }}" "${{ env.IMAGE }}:${TAG}"
+            sudo docker tag "${{ env.IMAGE }}:${{ github.sha }}" "${{ env.IMAGE }}:latest"
+            sudo docker push "${{ env.IMAGE }}:${TAG}"
+            sudo docker push "${{ env.IMAGE }}:latest"
           elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
-            sudo docker tag "${IMAGE}:${{ github.sha }}" "${IMAGE}:edge"
-            sudo docker push "${IMAGE}:edge"
+            sudo docker tag "${{ env.IMAGE }}:${{ github.sha }}" "${{ env.IMAGE }}:edge"
+            sudo docker push "${{ env.IMAGE }}:edge"
           fi
 
       - name: Clean
