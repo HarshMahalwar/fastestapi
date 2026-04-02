@@ -15,56 +15,52 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            cmake \
-            ninja-build \
-            pkg-config \
-            git \
-            ca-certificates \
-            libsqlite3-dev \
-            libssl-dev \
-            libpoco-dev \
-            curl \
-            python3 \
-            redis-server
+      - name: Build base image
+        run: sudo docker build --target base -t fastestapi-base .
 
       - name: Start Redis
         run: |
-          sudo systemctl start redis-server
-          redis-cli ping
-
-      - name: Configure
-        run: |
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTS=ON
-
-      - name: Build
-        run: cmake --build build --parallel
-
-      - name: Integration tests
-        run: |
-          chmod +x tests/integration_test.sh
-          bash tests/integration_test.sh ./build/example
-
-      - name: Unit tests
-        run: |
-          ./build/example &
-          SERVER_PID=$!
+          sudo docker rm -f ci-redis 2>/dev/null || true
+          sudo docker run -d --name ci-redis --network host redis:7
           sleep 2
+          sudo docker exec ci-redis redis-cli ping
 
-          test_exit=0
-          ./build/tests/unit_tests --gtest_output=xml:build/test-results.xml || test_exit=$?
+      - name: Build and test
+        run: |
+          sudo docker run --rm \
+            --network host \
+            -v "${{ github.workspace }}:/src" \
+            -w /src \
+            fastestapi-base bash -c '
+              set -e
 
-          kill "$SERVER_PID" 2>/dev/null || true
-          wait "$SERVER_PID" 2>/dev/null || true
-          rm -f fastestapi.db
+              apt-get update && apt-get install -y --no-install-recommends curl python3
 
-          exit $test_exit
+              cmake -B build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_TESTS=ON
+              cmake --build build --parallel
+
+              chmod +x tests/integration_test.sh
+              bash tests/integration_test.sh ./build/example
+
+              ./build/example &
+              SERVER_PID=$!
+              sleep 2
+
+              test_exit=0
+              ./build/tests/unit_tests --gtest_output=xml:build/test-results.xml || test_exit=$?
+
+              kill $SERVER_PID 2>/dev/null || true
+              wait $SERVER_PID 2>/dev/null || true
+              rm -f fastestapi.db
+
+              exit $test_exit
+            '
+
+      - name: Fix permissions
+        if: always()
+        run: sudo chown -R $(id -u):$(id -g) . 2>/dev/null || true
 
       - name: Upload test results
         if: always()
@@ -73,12 +69,9 @@ jobs:
           name: test-results
           path: build/test-results.xml
 
-      - name: Stop Redis
-        if: always()
-        run: sudo systemctl stop redis-server
-
       - name: Clean
         if: always()
         run: |
-          rm -f fastestapi.db test.db
-          rm -rf build
+          sudo docker rm -f ci-redis 2>/dev/null || true
+          sudo docker image rm -f fastestapi-base 2>/dev/null || true
+          rm -rf build fastestapi.db test.db
