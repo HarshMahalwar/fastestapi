@@ -11,17 +11,6 @@ jobs:
     name: Build & Test
     runs-on: [self-hosted, linux]
 
-    services:
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +29,13 @@ jobs:
             libssl-dev \
             libpoco-dev \
             curl \
-            python3
+            python3 \
+            redis-server
+
+      - name: Start Redis
+        run: |
+          sudo systemctl start redis-server
+          redis-cli ping
 
       - name: Configure
         run: |
@@ -77,6 +72,10 @@ jobs:
         with:
           name: test-results
           path: build/test-results.xml
+
+      - name: Stop Redis
+        if: always()
+        run: sudo systemctl stop redis-server
 
       - name: Clean
         if: always()
