@@ -11,10 +11,6 @@ jobs:
     name: Build & Test
     runs-on: [self-hosted, linux]
 
-    defaults:
-      run:
-        working-directory: fastestapi
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,7 +65,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: fastestapi/build/test-results.xml
+          path: build/test-results.xml
 
       - name: Clean
         if: always()
