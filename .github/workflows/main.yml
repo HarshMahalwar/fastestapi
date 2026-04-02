@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: [self-hosted, linux]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            git \
+            ca-certificates \
+            libsqlite3-dev \
+            libssl-dev \
+            libpoco-dev \
+            curl \
+            python3 \
+            redis-server
+
+      - name: Start Redis
+        run: |
+          sudo systemctl start redis-server
+          redis-cli ping
+
+      - name: Configure
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Integration tests
+        run: |
+          chmod +x tests/integration_test.sh
+          bash tests/integration_test.sh ./build/example
+
+      - name: Unit tests
+        run: |
+          ./build/example &
+          SERVER_PID=$!
+          sleep 2
+
+          test_exit=0
+          ./build/tests/unit_tests --gtest_output=xml:build/test-results.xml || test_exit=$?
+
+          kill "$SERVER_PID" 2>/dev/null || true
+          wait "$SERVER_PID" 2>/dev/null || true
+          rm -f fastestapi.db
+
+          exit $test_exit
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/test-results.xml
+
+      - name: Stop Redis
+        if: always()
+        run: sudo systemctl stop redis-server
+
+      - name: Clean
+        if: always()
+        run: |
+          rm -f fastestapi.db test.db
+          rm -rf build
