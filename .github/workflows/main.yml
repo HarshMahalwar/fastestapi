@@ -3,8 +3,13 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build:
@@ -69,9 +74,47 @@ jobs:
           name: test-results
           path: build/test-results.xml
 
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-linux-x64
+          path: build/example
+
+      - name: Login to GHCR
+        if: github.event_name == 'push'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build runtime image
+        if: github.event_name == 'push'
+        run: |
+          IMAGE=ghcr.io/${{ github.repository_owner }}/fastestapi-base
+          SHA_TAG="${IMAGE}:${{ github.sha }}"
+          sudo docker build -t "${SHA_TAG}" .
+
+      - name: Push runtime image
+        if: github.event_name == 'push'
+        run: |
+          IMAGE=ghcr.io/${{ github.repository_owner }}/fastestapi-base
+
+          sudo docker push "${IMAGE}:${{ github.sha }}"
+
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            sudo docker tag "${IMAGE}:${{ github.sha }}" "${IMAGE}:${TAG}"
+            sudo docker tag "${IMAGE}:${{ github.sha }}" "${IMAGE}:latest"
+            sudo docker push "${IMAGE}:${TAG}"
+            sudo docker push "${IMAGE}:latest"
+          elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
+            sudo docker tag "${IMAGE}:${{ github.sha }}" "${IMAGE}:edge"
+            sudo docker push "${IMAGE}:edge"
+          fi
+
       - name: Clean
         if: always()
         run: |
           sudo docker rm -f ci-redis 2>/dev/null || true
           sudo docker image rm -f fastestapi-base 2>/dev/null || true
+          sudo docker logout ghcr.io 2>/dev/null || true
           rm -rf build fastestapi.db test.db
