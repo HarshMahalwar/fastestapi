@@ -168,7 +168,7 @@ Create a `Dockerfile` in your application repository that inherits from the
 base image:
 
 ```dockerfile
-FROM NoFL1cksPlz/fastestapi-base:latest
+FROM ghcr.io/harshmahalwar/fastestapi-base:edge
 
 # Install Poco development libraries for Redis support
 RUN apt-get update && apt-get install -y --no-install-recommends \
