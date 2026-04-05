@@ -71,12 +71,35 @@ auto mc = std::make_shared<MemcachedCache>();
 ServiceRegistry::instance().setCache(mc);
 ```
 
-### Build
+### Build (standalone)
 
 ```bash
 mkdir build && cd build
 cmake ..
 cmake --build .
+```
+
+### Build with Conan
+
+```bash
+conan install . --output-folder=build --build=missing
+cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build .
+```
+
+To consume **fastestapi** in another Conan project, add it to your `conanfile.py`:
+
+```python
+def requirements(self):
+    self.requires("fastestapi/0.1.0")
+```
+
+To disable Redis/Poco support:
+
+```python
+def requirements(self):
+    self.requires("fastestapi/0.1.0", options={"with_redis": False})
 ```
 
 ### Run

@@ -3,3 +3,5 @@
 fastestapi.db
 fastestapi.db-shm
 fastestapi.db-wal
+/venv
+CMakeUserPresets.json

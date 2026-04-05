@@ -68,6 +68,19 @@ jobs:
               exit $test_exit
             '
 
+      - name: Validate Conan recipe
+        run: |
+          sudo docker run --rm \
+            --network host \
+            -v "${{ github.workspace }}:/src" \
+            -w /src \
+            fastestapi-base bash -c '
+              set -e
+              pip3 install --quiet conan
+              conan profile detect --force
+              conan create . --version=0.1.0 --build=missing
+            '
+
       - name: Add permissions
         if: always()
         run: sudo chown -R $(id -u):$(id -g) . 2>/dev/null || true
