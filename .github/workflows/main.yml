@@ -30,7 +30,7 @@ jobs:
 
       - name: Start Redis
         run: |
-          sudo docker rm -f ci-redis 2>/dev/null || true
+          sudo docker rm -f ci-redis > /dev/null 2>&1 || true
           sudo docker run -d --name ci-redis --network host redis:7
           sleep 2
           sudo docker exec ci-redis redis-cli ping
@@ -66,6 +66,22 @@ jobs:
               rm -f fastestapi.db
 
               exit $test_exit
+            '
+
+      - name: Validate Conan recipe
+        run: |
+          sudo docker run --rm \
+            --network host \
+            -v "${{ github.workspace }}:/src" \
+            -w /src \
+            fastestapi-base bash -c '
+              set -e
+              apt-get update && apt-get install -y --no-install-recommends python3-pip python3-venv
+              python3 -m venv /tmp/conan-venv
+              . /tmp/conan-venv/bin/activate
+              pip install --quiet conan
+              conan profile detect --force
+              conan create . --version=0.1.0 --build=missing
             '
 
       - name: Add permissions
@@ -115,7 +131,7 @@ jobs:
       - name: Clean
         if: always()
         run: |
-          sudo docker rm -f ci-redis 2>/dev/null || true
-          sudo docker image rm -f fastestapi-base 2>/dev/null || true
-          sudo docker logout ghcr.io 2>/dev/null || true
+          sudo docker rm -f ci-redis > /dev/null 2>&1 || true
+          sudo docker image rm -f fastestapi-base > /dev/null 2>&1 || true
+          sudo docker logout ghcr.io > /dev/null 2>&1 || true
           rm -rf build fastestapi.db test.db
