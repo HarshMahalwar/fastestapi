@@ -76,8 +76,10 @@ jobs:
             -w /src \
             fastestapi-base bash -c '
               set -e
-              apt-get update && apt-get install -y --no-install-recommends python3-pip
-              pip3 install --quiet conan
+              apt-get update && apt-get install -y --no-install-recommends python3-pip python3-venv
+              python3 -m venv /tmp/conan-venv
+              . /tmp/conan-venv/bin/activate
+              pip install --quiet conan
               conan profile detect --force
               conan create . --version=0.1.0 --build=missing
             '
