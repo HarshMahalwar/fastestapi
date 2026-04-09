@@ -13,6 +13,7 @@ class FastestAPIConan(ConanFile):
     homepage = "https://github.com/HarshMahalwar/fastestapi"
     topics = ("rest", "api", "http", "framework", "fastapi", "cpp17")
 
+    package_type = "header-library"
     settings = "os", "compiler", "build_type", "arch"
     options = {
         "with_redis": [True, False],
@@ -45,12 +46,6 @@ class FastestAPIConan(ConanFile):
         deps.generate()
         tc = CMakeToolchain(self)
         tc.generate()
-
-    def build(self):
-        pass
-
-    def package_id(self):
-        self.info.clear()
 
     def package(self):
         copy(self, "*.hpp", src=os.path.join(self.source_folder, "include"),
